@@ -1,0 +1,5 @@
+{
+    "id": "libheap",
+    "type": "lib",
+    "description": "A simple heap allocation library for hobby operating systems"
+}
