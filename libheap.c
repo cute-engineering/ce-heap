@@ -1,6 +1,6 @@
 #include "libheap.h"
 
-// Heap hook functions
+/* Heap hook functions */
 
 void *heap_alloc_block(struct Heap *heap, size_t size) {
   return heap->alloc(heap->ctx, size);
@@ -14,7 +14,7 @@ void heap_error(struct Heap *heap, const char *msg) {
   heap->error(heap->ctx, msg);
 }
 
-// Heap node functions
+/* Heap node functions */
 
 bool heap_node_check(struct Heap *heap, struct HeapNode *node) {
   if (node->magic == HEAP_MAGIC)
@@ -25,8 +25,8 @@ bool heap_node_check(struct Heap *heap, struct HeapNode *node) {
     return false;
   }
 
-  size_t overflow = 0;
-  for (size_t i = 0; i < sizeof(node->magic); i++) {
+  size_t overflow = 0, i = 0;
+  for (i = 0; i < sizeof(node->magic); i++) {
     if (node->m[i] != 0xc0)
       overflow++;
   }
@@ -70,7 +70,7 @@ void heap_node_remove(struct HeapNode *node) {
   node->next = NULL;
 }
 
-// Heap major functions
+/* Heap major functions */
 
 size_t heap_major_avail(struct HeapMajor *maj) { return maj->size - maj->used; }
 
@@ -84,7 +84,6 @@ struct HeapMajor *heap_major_create(struct Heap *heap, size_t size) {
       .magic = HEAP_MAGIC,
       .size = size,
       .used = HEAP_ALIGN,
-      .minor = NULL,
   };
 
   return maj;
@@ -94,7 +93,7 @@ struct HeapMinor *heap_major_alloc(struct HeapMajor *maj, size_t size) {
   struct HeapMinor *min = maj->minor;
 
   while (min) {
-    if (min->used == 0 && heap_minor_avail(min) >= size) {
+    if (!min->used && heap_minor_avail(min) >= size) {
       heap_minor_resize(min, size);
       return min;
     }
@@ -110,11 +109,19 @@ struct HeapMinor *heap_major_alloc(struct HeapMajor *maj, size_t size) {
 }
 
 void heap_major_free(struct Heap *heap, struct HeapMajor *maj) {
+  struct HeapMajor *next = maj->next;
+
   heap_node_remove(&maj->base);
   heap_free_block(heap, maj, maj->size);
+
+  if (heap->root == maj)
+    heap->root = next;
+
+  if (heap->best == maj)
+    heap->best = NULL;
 }
 
-// Heap minor functions
+/* Heap minor functions */
 
 size_t heap_minor_avail(struct HeapMinor *min) { return min->size - min->used; }
 
@@ -123,7 +130,7 @@ struct HeapMinor *heap_minor_create(struct HeapMajor *maj, size_t size) {
 
   *min = (struct HeapMinor){
       .magic = HEAP_MAGIC,
-      .size = maj->size - HEAP_ALIGN,
+      .size = heap_major_avail(maj) - HEAP_ALIGN,
       .used = size,
       .major = maj,
   };
@@ -136,43 +143,50 @@ struct HeapMinor *heap_minor_create(struct HeapMajor *maj, size_t size) {
 
 struct HeapMinor *heap_minor_split(struct HeapMinor *min, size_t size) {
   struct HeapMajor *maj = min->major;
+  struct HeapMinor *newMin =
+      (struct HeapMinor *)((uintptr_t)min + HEAP_ALIGN + min->used);
 
-  struct HeapMinor *newMin = (struct HeapMinor *)((uint8_t *)min + min->used);
   *newMin = (struct HeapMinor){
       .magic = HEAP_MAGIC,
-      .size = min->size - min->used - HEAP_ALIGN,
+      .size = heap_minor_avail(min) - HEAP_ALIGN,
       .used = size,
       .major = maj,
   };
 
   min->size = min->used;
-  maj->used += HEAP_ALIGN;
-  heap_node_append(&maj->base, &newMin->base);
+  maj->used += HEAP_ALIGN + size;
+  heap_node_append(&min->base, &newMin->base);
 
   return newMin;
 }
 
-void heap_minor_free(struct HeapMinor *min) {
+void heap_minor_free(struct Heap *heap, struct HeapMinor *min) {
   struct HeapMajor *maj = min->major;
+  struct HeapMinor *prev = min->prev;
+  struct HeapMinor *next = min->next;
 
-  maj->used -= min->size;
+  maj->used -= min->used;
   min->used = 0;
 
-  if (min->prev) {
-    struct HeapMinor *prev = min->prev;
-    prev->size += min->size + HEAP_ALIGN;
+  if (prev) {
     min->magic = HEAP_DEAD;
+    prev->size += min->size + HEAP_ALIGN;
     maj->used -= HEAP_ALIGN;
+
     heap_node_remove(&min->base);
     min = prev;
   }
 
-  if (min->next && min->used == 0) {
-    struct HeapMinor *next = min->next;
+  if (next && !next->used) {
     next->magic = HEAP_DEAD;
     min->size += next->size + HEAP_ALIGN;
     maj->used -= HEAP_ALIGN;
+
     heap_node_remove(&next->base);
+  }
+
+  if (maj->used == HEAP_ALIGN) {
+    heap_major_free(heap, maj);
   }
 }
 
@@ -193,18 +207,21 @@ void *heap_minor_to(struct HeapMinor *min) {
   return (void *)((uintptr_t)min + HEAP_ALIGN);
 }
 
-// Heap functions
+/* Heap functions */
 
 void *heap_alloc(struct Heap *heap, size_t size) {
+  struct HeapMajor *maj;
+  struct HeapMinor *min;
+
   size = HEAP_ALIGNED(size);
   if (size == 0) {
     return NULL;
   }
 
   if (!heap->root) {
-    heap->root = heap_major_create(heap, HEAP_MIN_REQU);
+    heap->root = heap_major_create(heap, size);
     heap->best = heap->root;
-    struct HeapMinor *min = heap_minor_create(heap->root, size);
+    min = heap_minor_create(heap->root, size);
     return heap_minor_to(min);
   }
 
@@ -213,13 +230,13 @@ void *heap_alloc(struct Heap *heap, size_t size) {
   }
 
   if (heap_major_avail(heap->best) >= size) {
-    struct HeapMinor *min = heap_major_alloc(heap->best, size);
+    min = heap_major_alloc(heap->best, size);
     if (min) {
       return heap_minor_to(min);
     }
   }
 
-  struct HeapMajor *maj = heap->root;
+  maj = heap->root;
 
   while (maj) {
     if (heap_major_avail(maj) > heap_major_avail(heap->best)) {
@@ -227,7 +244,7 @@ void *heap_alloc(struct Heap *heap, size_t size) {
     }
 
     if (heap_major_avail(maj) >= size) {
-      struct HeapMinor *min = heap_major_alloc(maj, size);
+      min = heap_major_alloc(maj, size);
       if (min) {
         return heap_minor_to(min);
       }
@@ -241,6 +258,8 @@ void *heap_alloc(struct Heap *heap, size_t size) {
 }
 
 void *heap_realloc(struct Heap *heap, void *ptr, size_t size) {
+  size = HEAP_ALIGNED(size);
+
   if (ptr == NULL)
     return heap_alloc(heap, size);
 
@@ -266,11 +285,13 @@ void *heap_realloc(struct Heap *heap, void *ptr, size_t size) {
 }
 
 void *heap_calloc(struct Heap *heap, size_t num, size_t size) {
-  return heap_alloc(heap, num * size);
+  void *ptr = heap_alloc(heap, num * size);
+  memset(ptr, 0, num * size);
+  return ptr;
 }
 
 void heap_free(struct Heap *heap, void *ptr) {
-  if (ptr == NULL) {
+  if (!ptr) {
     heap_error(heap, "freeing NULL pointer");
     return;
   }
@@ -280,5 +301,5 @@ void heap_free(struct Heap *heap, void *ptr) {
   if (!heap_node_check(heap, &min->base))
     return;
 
-  heap_minor_free(min);
+  heap_minor_free(heap, min);
 }

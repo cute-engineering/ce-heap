@@ -1,6 +1,6 @@
-#include <stdio.h>
-#include <stdlib.h>
+#include <pthread.h>
 #include <sys/mman.h>
+#include <unistd.h>
 
 #include "libheap.h"
 
@@ -17,7 +17,8 @@ void heap_hook_free_block(void *ctx, void *ptr, size_t size) {
 
 void heap_hook_error(void *ctx, const char *msg) {
   (void)ctx;
-  fprintf(stderr, "heap: %s\n", msg);
+  write(2, msg, strlen(msg));
+  write(2, "\n", 1);
 }
 
 struct Heap _heap = {
@@ -26,14 +27,32 @@ struct Heap _heap = {
     .error = heap_hook_error,
 };
 
-void *malloc(size_t size) { return heap_alloc(&_heap, size); }
+// lock for heap
+static pthread_mutex_t _heap_lock = PTHREAD_MUTEX_INITIALIZER;
 
-void free(void *ptr) { heap_free(&_heap, ptr); }
+void *malloc(size_t size) {
+  pthread_mutex_lock(&_heap_lock);
+  void *res = heap_alloc(&_heap, size);
+  pthread_mutex_unlock(&_heap_lock);
+  return res;
+}
+
+void free(void *ptr) {
+  pthread_mutex_lock(&_heap_lock);
+  heap_free(&_heap, ptr);
+  pthread_mutex_unlock(&_heap_lock);
+}
 
 void *calloc(size_t nmemb, size_t size) {
-  return heap_calloc(&_heap, nmemb, size);
+  pthread_mutex_lock(&_heap_lock);
+  void *res = heap_calloc(&_heap, nmemb, size);
+  pthread_mutex_unlock(&_heap_lock);
+  return res;
 }
 
 void *realloc(void *ptr, size_t size) {
-  return heap_realloc(&_heap, ptr, size);
+  pthread_mutex_lock(&_heap_lock);
+  void *res = heap_realloc(&_heap, ptr, size);
+  pthread_mutex_unlock(&_heap_lock);
+  return res;
 }

@@ -1,11 +1,12 @@
-CFLAGS += -I.
+CFLAGS += -std=c89 -MD -I. -fPIC -fsanitize=undefined
 
 .PHONY: all
 all: libheap.so libheap.a
 
 .PHONY: clean
 clean:
-	rm -f *.o *.so *.a
+	rm -f *.o *.so *.a *.d
+	rm -f impl/*.o impl/*.d
 
 %.so:
 	$(CC) -shared -o $@ $^
