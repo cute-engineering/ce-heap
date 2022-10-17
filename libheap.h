@@ -6,7 +6,7 @@
 #include <stdint.h>
 #include <string.h>
 
-#define HEAP_MAGIC 0xc001c0dec001c0de
+#define HEAP_MAGIC 0xc0c0c0c0c0c0c0c0
 #define HEAP_DEAD 0xdeaddeaddeaddead
 #define HEAP_ALIGN (64)
 #define HEAP_PAGE_SIZE (4096)
@@ -16,7 +16,10 @@
   (((X) + (HEAP_PAGE_SIZE - 1)) & ~(HEAP_PAGE_SIZE - 1))
 
 struct HeapNode {
-  uint64_t magic;
+  union {
+    uint64_t magic;
+    uint8_t m[8];
+  };
   struct HeapNode *prev;
   struct HeapNode *next;
 };
@@ -45,19 +48,20 @@ struct HeapMinor {
   struct HeapMajor *major;
 };
 
-typedef void *HeapAllocBlock(void *ctx, size_t size);
+typedef void *HeapAllocBlockFn(void *ctx, size_t size);
 
-typedef void HeapFreeBlock(void *ctx, void *ptr, size_t size);
+typedef void HeapFreeBlockFn(void *ctx, void *ptr, size_t size);
 
-typedef void HeapPanic(void *ctx, const char *msg);
+typedef void HeapErrorFn(void *ctx, const char *msg);
 
 struct Heap {
   void *ctx;
+  HeapAllocBlockFn *alloc;
+  HeapFreeBlockFn *free;
+  HeapErrorFn *error;
+
   struct HeapMajor *root;
   struct HeapMajor *best;
-  HeapAllocBlock *alloc;
-  HeapFreeBlock *free;
-  HeapPanic *panic;
 };
 
 // Heap hook functions
@@ -66,11 +70,11 @@ void *heap_alloc_block(struct Heap *heap, size_t size);
 
 void heap_free_block(struct Heap *heap, void *ptr, size_t size);
 
-void heap_panic(struct Heap *heap, const char *msg);
+void heap_error(struct Heap *heap, const char *msg);
 
 // Heap node functions
 
-bool heap_node_check(struct HeapNode *node);
+bool heap_node_check(struct Heap *heap, struct HeapNode *node);
 
 void heap_node_append(struct HeapNode *node, struct HeapNode *other);
 

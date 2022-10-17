@@ -10,41 +10,62 @@ void heap_free_block(struct Heap *heap, void *ptr, size_t size) {
   heap->free(heap->ctx, ptr, size);
 }
 
-void heap_panic(struct Heap *heap, const char *msg) {
-  heap->panic(heap->ctx, msg);
+void heap_error(struct Heap *heap, const char *msg) {
+  heap->error(heap->ctx, msg);
 }
 
 // Heap node functions
 
-bool heap_node_check(struct HeapNode *node) {
-  return node->magic == HEAP_MAGIC;
+bool heap_node_check(struct Heap *heap, struct HeapNode *node) {
+  if (node->magic == HEAP_MAGIC)
+    return true;
+
+  if (node->magic == HEAP_DEAD) {
+    heap_error(heap, "heap double free detected");
+    return false;
+  }
+
+  size_t overflow = 0;
+  for (size_t i = 0; i < sizeof(node->magic); i++) {
+    if (node->m[i] != 0xc0)
+      overflow++;
+  }
+
+  if (overflow == sizeof(node->magic))
+    heap_error(heap, "heap corruption/use-after-free detected");
+  else
+    heap_error(heap, "heap overflow detected");
+
+  return false;
 }
 
-void heap_node_append(struct HeapNode *node, struct HeapNode *other) {
-  other->prev = node;
-  other->next = node->next;
-  if (node->next) {
-    node->next->prev = other;
+void heap_node_append(struct HeapNode *list, struct HeapNode *node) {
+  node->prev = list;
+  node->next = list->next;
+  if (list->next) {
+    list->next->prev = node;
   }
-  node->next = other;
+  list->next = node;
 }
 
-void heap_node_prepend(struct HeapNode *node, struct HeapNode *other) {
-  other->next = node;
-  other->prev = node->prev;
-  if (node->prev) {
-    node->prev->next = other;
+void heap_node_prepend(struct HeapNode *list, struct HeapNode *node) {
+  node->next = list;
+  node->prev = list->prev;
+  if (list->prev) {
+    list->prev->next = node;
   }
-  node->prev = other;
+  list->prev = node;
 }
 
 void heap_node_remove(struct HeapNode *node) {
   if (node->prev) {
     node->prev->next = node->next;
   }
+
   if (node->next) {
     node->next->prev = node->prev;
   }
+
   node->prev = NULL;
   node->next = NULL;
 }
@@ -71,6 +92,7 @@ struct HeapMajor *heap_major_create(struct Heap *heap, size_t size) {
 
 struct HeapMinor *heap_major_alloc(struct HeapMajor *maj, size_t size) {
   struct HeapMinor *min = maj->minor;
+
   while (min) {
     if (min->used == 0 && heap_minor_avail(min) >= size) {
       heap_minor_resize(min, size);
@@ -219,9 +241,8 @@ void *heap_alloc(struct Heap *heap, size_t size) {
 }
 
 void *heap_realloc(struct Heap *heap, void *ptr, size_t size) {
-  if (ptr == NULL) {
+  if (ptr == NULL)
     return heap_alloc(heap, size);
-  }
 
   if (size == 0) {
     heap_free(heap, ptr);
@@ -230,9 +251,8 @@ void *heap_realloc(struct Heap *heap, void *ptr, size_t size) {
 
   struct HeapMinor *min = heap_minor_from(ptr);
 
-  if (!heap_node_check(&min->base)) {
-    heap_panic(heap, "heap_realloc: invalid pointer");
-  }
+  if (!heap_node_check(heap, &min->base))
+    return NULL;
 
   if (min->size >= size) {
     heap_minor_resize(min, size);
@@ -251,14 +271,14 @@ void *heap_calloc(struct Heap *heap, size_t num, size_t size) {
 
 void heap_free(struct Heap *heap, void *ptr) {
   if (ptr == NULL) {
+    heap_error(heap, "freeing NULL pointer");
     return;
   }
 
   struct HeapMinor *min = heap_minor_from(ptr);
 
-  if (!heap_node_check(&min->base)) {
-    heap_panic(heap, "heap_free: invalid pointer");
-  }
+  if (!heap_node_check(heap, &min->base))
+    return;
 
   heap_minor_free(min);
 }
