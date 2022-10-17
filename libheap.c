@@ -17,6 +17,8 @@ void heap_error(struct Heap *heap, const char *msg) {
 /* Heap node functions */
 
 bool heap_node_check(struct Heap *heap, struct HeapNode *node) {
+  size_t overflow = 0, i = 0;
+
   if (node->magic == HEAP_MAGIC)
     return true;
 
@@ -25,7 +27,6 @@ bool heap_node_check(struct Heap *heap, struct HeapNode *node) {
     return false;
   }
 
-  size_t overflow = 0, i = 0;
   for (i = 0; i < sizeof(node->magic); i++) {
     if (node->m[i] != 0xc0)
       overflow++;
@@ -258,6 +259,9 @@ void *heap_alloc(struct Heap *heap, size_t size) {
 }
 
 void *heap_realloc(struct Heap *heap, void *ptr, size_t size) {
+  void *nptr;
+  struct HeapMinor *min;
+
   size = HEAP_ALIGNED(size);
 
   if (ptr == NULL)
@@ -268,7 +272,7 @@ void *heap_realloc(struct Heap *heap, void *ptr, size_t size) {
     return NULL;
   }
 
-  struct HeapMinor *min = heap_minor_from(ptr);
+  min = heap_minor_from(ptr);
 
   if (!heap_node_check(heap, &min->base))
     return NULL;
@@ -278,7 +282,7 @@ void *heap_realloc(struct Heap *heap, void *ptr, size_t size) {
     return ptr;
   }
 
-  void *nptr = heap_alloc(heap, size);
+  nptr = heap_alloc(heap, size);
   memcpy(nptr, ptr, min->size);
   heap_free(heap, ptr);
   return nptr;
@@ -291,12 +295,14 @@ void *heap_calloc(struct Heap *heap, size_t num, size_t size) {
 }
 
 void heap_free(struct Heap *heap, void *ptr) {
+  struct HeapMinor *min;
+
   if (!ptr) {
     heap_error(heap, "freeing NULL pointer");
     return;
   }
 
-  struct HeapMinor *min = heap_minor_from(ptr);
+  min = heap_minor_from(ptr);
 
   if (!heap_node_check(heap, &min->base))
     return;

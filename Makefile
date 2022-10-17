@@ -1,4 +1,4 @@
-CFLAGS += -std=c89 -MD -I. -fPIC -fsanitize=undefined
+CFLAGS += -I. -fPIC
 
 .PHONY: all
 all: libheap.so libheap.a
