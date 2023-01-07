@@ -1,6 +1,7 @@
 #ifndef LIBHEAP_H
 #define LIBHEAP_H
 
+#include <stdarg.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -54,13 +55,19 @@ typedef void *HeapAllocBlockFn(void *ctx, size_t size);
 
 typedef void HeapFreeBlockFn(void *ctx, void *ptr, size_t size);
 
-typedef void HeapErrorFn(void *ctx, const char *msg);
+enum HeapLogType {
+  HEAP_TRACE,
+  HEAP_ERROR,
+};
+
+typedef void HeapLogFn(void *ctx, enum HeapLogType type, const char *fmt,
+                       va_list args);
 
 struct Heap {
   void *ctx;
   HeapAllocBlockFn *alloc;
   HeapFreeBlockFn *free;
-  HeapErrorFn *error;
+  HeapLogFn *log;
 
   struct HeapMajor *root;
   struct HeapMajor *best;
@@ -72,7 +79,9 @@ void *heap_alloc_block(struct Heap *heap, size_t size);
 
 void heap_free_block(struct Heap *heap, void *ptr, size_t size);
 
-void heap_error(struct Heap *heap, const char *msg);
+void heap_trace(struct Heap *heap, const char *msg, ...);
+
+void heap_error(struct Heap *heap, const char *msg, ...);
 
 /* Heap node functions */
 
@@ -90,11 +99,10 @@ size_t heap_major_avail(struct HeapMajor *maj);
 
 struct HeapMajor *heap_major_create(struct Heap *heap, size_t size);
 
-struct HeapMinor *heap_major_alloc(struct HeapMajor *maj, size_t size);
+struct HeapMinor *heap_major_alloc(struct Heap *heap, struct HeapMajor *maj,
+                                   size_t size);
 
 void heap_major_free(struct Heap *heap, struct HeapMajor *maj);
-
-struct HeapMinor *heap_major_alloc(struct HeapMajor *maj, size_t size);
 
 /* Heap minor functions */
 

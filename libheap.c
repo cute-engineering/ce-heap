@@ -10,8 +10,18 @@ void heap_free_block(struct Heap *heap, void *ptr, size_t size) {
   heap->free(heap->ctx, ptr, size);
 }
 
-void heap_error(struct Heap *heap, const char *msg) {
-  heap->error(heap->ctx, msg);
+void heap_trace(struct Heap *heap, const char *msg, ...) {
+  va_list args;
+  va_start(args, msg);
+  heap->log(heap->ctx, HEAP_TRACE, msg, args);
+  va_end(args);
+}
+
+void heap_error(struct Heap *heap, const char *msg, ...) {
+  va_list args;
+  va_start(args, msg);
+  heap->log(heap->ctx, HEAP_ERROR, msg, args);
+  va_end(args);
 }
 
 /* Heap node functions */
@@ -90,16 +100,19 @@ struct HeapMajor *heap_major_create(struct Heap *heap, size_t size) {
   return maj;
 }
 
-struct HeapMinor *heap_major_alloc(struct HeapMajor *maj, size_t size) {
+struct HeapMinor *heap_major_alloc(struct Heap *heap, struct HeapMajor *maj,
+                                   size_t size) {
   struct HeapMinor *min = maj->minor;
 
   while (min) {
     if (!min->used && heap_minor_avail(min) >= size) {
+      heap_trace(heap, "heap minor is unused and big enough, reusing");
       heap_minor_resize(min, size);
       return min;
     }
 
     if (min->used && heap_minor_avail(min) >= size + HEAP_ALIGN) {
+      heap_trace(heap, "heap minor is used but big enough, splitting");
       return heap_minor_split(min, size);
     }
 
@@ -170,6 +183,7 @@ void heap_minor_free(struct Heap *heap, struct HeapMinor *min) {
   min->used = 0;
 
   if (prev) {
+    heap_trace(heap, "mergin with previous minor");
     min->magic = HEAP_DEAD;
     prev->size += min->size + HEAP_ALIGN;
     maj->used -= HEAP_ALIGN;
@@ -179,6 +193,7 @@ void heap_minor_free(struct Heap *heap, struct HeapMinor *min) {
   }
 
   if (next && !next->used) {
+    heap_trace(heap, "next minor is unused, merging");
     next->magic = HEAP_DEAD;
     min->size += next->size + HEAP_ALIGN;
     maj->used -= HEAP_ALIGN;
@@ -187,6 +202,7 @@ void heap_minor_free(struct Heap *heap, struct HeapMinor *min) {
   }
 
   if (maj->used == HEAP_ALIGN) {
+    heap_trace(heap, "major is empty, freeing");
     heap_major_free(heap, maj);
   }
 }
@@ -214,48 +230,66 @@ void *heap_alloc(struct Heap *heap, size_t size) {
   struct HeapMajor *maj;
   struct HeapMinor *min;
 
+  heap_trace(heap, "allocating %zu bytes", size);
+
   size = HEAP_ALIGNED(size);
   if (size == 0) {
+    heap_trace(heap, "done: size is 0");
     return NULL;
   }
 
   if (!heap->root) {
+    heap_trace(heap, "no root, creating new major");
     heap->root = heap_major_create(heap, size);
     heap->best = heap->root;
     min = heap_minor_create(heap->root, size);
+
+    heap_trace(heap, "done: created new major");
     return heap_minor_to(min);
   }
 
   if (!heap->best) {
+    heap_trace(heap, "no best, setting to root");
     heap->best = heap->root;
   }
 
   if (heap_major_avail(heap->best) >= size) {
-    min = heap_major_alloc(heap->best, size);
+    heap_trace(heap, "best major has enough space");
+    min = heap_major_alloc(heap, heap->best, size);
     if (min) {
+      heap_trace(heap, "done: allocated from best major");
       return heap_minor_to(min);
     }
+    heap_trace(heap, "major doesn't enough contiguous space");
   }
 
   maj = heap->root;
 
   while (maj) {
     if (heap_major_avail(maj) > heap_major_avail(heap->best)) {
+      heap_trace(heap, "found better major");
       heap->best = maj;
     }
 
     if (heap_major_avail(maj) >= size) {
-      min = heap_major_alloc(maj, size);
+      heap_trace(heap, "found major with enough space");
+      min = heap_major_alloc(heap, maj, size);
       if (min) {
+        heap_trace(heap, "done: allocated from major");
         return heap_minor_to(min);
       }
+      heap_trace(heap, "major doesn't enough contiguous space");
     }
 
     maj = maj->next;
   }
 
+  heap_trace(heap, "no major with enough space, creating new major");
   maj = heap_major_create(heap, size);
-  return heap_minor_to(heap_minor_create(maj, size));
+  min = heap_minor_create(maj, size);
+
+  heap_trace(heap, "done: created new major");
+  return heap_minor_to(min);
 }
 
 void *heap_realloc(struct Heap *heap, void *ptr, size_t size) {
