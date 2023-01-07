@@ -1,5 +1,11 @@
 CFLAGS += -I. -fPIC
 
+# enable asan
+CFLAGS += -fsanitize=address -fno-omit-frame-pointer
+
+# enable ubsan
+CFLAGS += -fsanitize=undefined
+
 .PHONY: all
 all: libheap.so libheap.a
 
@@ -21,4 +27,4 @@ libheap-posix.so: libheap.o impl/posix.o
 libheap-posix.a: libheap.o impl/posix.o
 
 tests: tests.o libheap.o impl/mmap.o
-	$(CC) -o $@ $^
+	$(CC) $(CFLAGS) -o $@ $^

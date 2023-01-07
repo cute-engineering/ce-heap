@@ -90,6 +90,8 @@ struct HeapMajor *heap_major_create(struct Heap *heap, size_t size) {
   size = size < HEAP_MIN_REQU ? HEAP_MIN_REQU : size;
   size = HEAP_PAGE_ALIGNED(size);
 
+  heap_trace(heap, "heap major create (size=%zu)", size);
+
   struct HeapMajor *maj = (struct HeapMajor *)heap_alloc_block(heap, size);
   *maj = (struct HeapMajor){
       .magic = HEAP_MAGIC,
@@ -228,6 +230,7 @@ void *heap_minor_to(struct HeapMinor *min) {
 
 void *heap_alloc(struct Heap *heap, size_t size) {
   struct HeapMajor *maj;
+  struct HeapMajor *prev;
   struct HeapMinor *min;
 
   heap_trace(heap, "allocating %zu bytes", size);
@@ -281,11 +284,14 @@ void *heap_alloc(struct Heap *heap, size_t size) {
       heap_trace(heap, "major doesn't enough contiguous space");
     }
 
+    heap_trace(heap, "moving to next major");
+    prev = maj;
     maj = maj->next;
   }
 
   heap_trace(heap, "no major with enough space, creating new major");
   maj = heap_major_create(heap, size);
+  heap_node_append(&prev->base, &maj->base);
   min = heap_minor_create(maj, size);
 
   heap_trace(heap, "done: created new major");

@@ -2,7 +2,8 @@
 
 int main() {
   struct Heap heap = heap_impl();
-  void *p1 = heap_alloc(&heap, 16);
-  void *p2 = heap_alloc(&heap, 16);
+  for (int i = 0; i < 100; i++) {
+    heap_alloc(&heap, 512);
+  }
   return 0;
 }

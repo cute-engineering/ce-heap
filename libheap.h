@@ -73,6 +73,8 @@ struct Heap {
   struct HeapMajor *best;
 };
 
+/* ---- Internal functions -------------------------------------------------- */
+
 /* Heap hook functions */
 
 void *heap_alloc_block(struct Heap *heap, size_t size);
@@ -120,7 +122,7 @@ struct HeapMinor *heap_minor_from(void *ptr);
 
 void *heap_minor_to(struct HeapMinor *min);
 
-/* Heap functions */
+/* ---- Public functions ---------------------------------------------------- */
 
 void *heap_alloc(struct Heap *heap, size_t size);
 
