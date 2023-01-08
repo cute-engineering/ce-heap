@@ -233,6 +233,7 @@ void *heap_alloc(struct Heap *heap, size_t size) {
   struct HeapMajor *prev;
   struct HeapMinor *min;
 
+  heap_trace(heap, "------------------------");
   heap_trace(heap, "allocating %zu bytes", size);
 
   size = HEAP_ALIGNED(size);
@@ -267,7 +268,7 @@ void *heap_alloc(struct Heap *heap, size_t size) {
   }
 
   maj = heap->root;
-
+  heap_trace(heap, "searching for major with enough space");
   while (maj) {
     if (heap_major_avail(maj) > heap_major_avail(heap->best)) {
       heap_trace(heap, "found better major");
@@ -281,7 +282,7 @@ void *heap_alloc(struct Heap *heap, size_t size) {
         heap_trace(heap, "done: allocated from major");
         return heap_minor_to(min);
       }
-      heap_trace(heap, "major doesn't enough contiguous space");
+      heap_trace(heap, "major doesn't have enough  contiguous space");
     }
 
     heap_trace(heap, "moving to next major");
