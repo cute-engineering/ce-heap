@@ -26,5 +26,5 @@ libheap.a: libheap.o
 libheap-posix.so: libheap.o impl/posix.o
 libheap-posix.a: libheap.o impl/posix.o
 
-tests: tests.o libheap.o impl/mmap.o
+tests/tests: tests/tests.o libheap.o impl/mmap.o
 	$(CC) $(CFLAGS) -o $@ $^

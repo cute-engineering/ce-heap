@@ -7,6 +7,10 @@
 #include <stdint.h>
 #include <string.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define HEAP_MAGIC 0xc0c0c0c0c0c0c0c0
 #define HEAP_DEAD 0xdeaddeaddeaddead
 #define HEAP_ALIGN (64)
@@ -131,5 +135,9 @@ void *heap_realloc(struct Heap *heap, void *ptr, size_t size);
 void *heap_calloc(struct Heap *heap, size_t num, size_t size);
 
 void heap_free(struct Heap *heap, void *ptr);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
