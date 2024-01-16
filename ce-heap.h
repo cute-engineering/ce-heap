@@ -15,14 +15,18 @@ extern "C" {
 #define CE_HEAP_PAGE_ALIGNED(X)                                                \
   (((X) + (CE_HEAP_PAGE_SIZE - 1)) & ~(CE_HEAP_PAGE_SIZE - 1))
 
-typedef struct ce_heap_node {
+typedef struct ce_heap_node ce_heap_node;
+typedef struct ce_heap_major ce_heap_major;
+typedef struct ce_heap_minor ce_heap_minor;
+
+struct ce_heap_node {
   union {
     ce_u64 magic;
     ce_u8 m[8];
   };
-  struct ce_heap_node *prev;
-  struct ce_heap_node *next;
-} ce_heap_node;
+  ce_heap_node *prev;
+  ce_heap_node *next;
+};
 
 #define CE_HEAP_NODE(T)                                                        \
   union {                                                                      \
@@ -34,21 +38,21 @@ typedef struct ce_heap_node {
     };                                                                         \
   }
 
-typedef struct ce_heap_major {
-  CE_HEAP_NODE(struct ce_heap_major);
+struct ce_heap_major {
+  CE_HEAP_NODE(ce_heap_major);
 
   ce_usize size;
   ce_usize used;
-  struct ce_heap_minor *minor;
-} ce_heap_major;
+  ce_heap_minor *minor;
+};
 
-typedef struct ce_heap_minor {
-  CE_HEAP_NODE(struct ce_heap_minor);
+struct ce_heap_minor {
+  CE_HEAP_NODE(ce_heap_minor);
 
   ce_usize size;
   ce_usize used;
   ce_heap_major *major;
-} ce_heap_minor;
+};
 
 typedef void *ce_heap_alloc_fn(void *ctx, ce_usize size);
 

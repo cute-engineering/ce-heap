@@ -5,5 +5,8 @@
     "description": "Cute Engineering Heap Library",
     "props": {
         "cpp-root-include": true
-    }
+    },
+    "requires": [
+        "ce-base"
+    ]
 }
