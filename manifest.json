@@ -1,6 +1,9 @@
 {
     "$schema": "https://schemas.cute.engineering/stable/cutekit.manifest.component.v1",
-    "id": "libheap",
+    "id": "ce-heap",
     "type": "lib",
-    "description": "A simple heap allocation library for hobby operating systems"
+    "description": "Cute Engineering Heap Library",
+    "props": {
+        "cpp-root-include": true
+    }
 }

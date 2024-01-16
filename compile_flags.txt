@@ -1,5 +1,6 @@
--std=c11
+-xc
+-O3
+-std=gnu2x
 -Wall
 -Wextra
 -Werror
--I.

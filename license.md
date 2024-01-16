@@ -1,6 +1,8 @@
 MIT License
 
 Copyright (c) 2022 Développement Système Exploitation
+Copyright (c) 2024 Cute Engineering
+
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
